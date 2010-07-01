@@ -1,0 +1,202 @@
+#!/usr/bin/perl
+=head1 NAME
+
+pre-commit-parser.pl - Examine the pre-commit files and check for syntax errors
+
+=cut
+
+use strict;
+use Carp;
+use Getopt::Long;
+use File::Basename;
+use File::Temp qw/tempfile/;
+
+=head1 SYSNOPSIS
+
+B<pre-commit-parser.pl> [B<--revision I<number>>] [B<--transaction I<number>>] [B<--repo I<URL>>] [B<--svnlook I<filename>>]
+
+=head1 DESCRIPTION
+
+pre-commit-parser.pl is a simple little program to look at the commited files and parse them for syntax errors before allowing the commit.  The script is largely 'inspired' by the contrib/hook-scripts/svn-keyword-check.pl.  
+
+=cut
+
+my ($revision, $transaction, $repository, $svnlook);
+GetOptions(
+    'revision|r=s'    => \$revision,
+    'transaction|t=s' => \$transaction,
+    'repos=s'         => \$repository,
+    'svnlook=s'       => \$svnlook,
+);
+
+=head1 OPTIONS
+
+=over 5
+
+=item <B-h>
+
+Display a brief help message.
+
+=item <B--revision number (-r) I<number>>
+
+Specify the revision number. 
+
+=item <B--transaction (-t) I<number>>
+
+Specify the transaction number.
+
+=item <B--repos I<URL>>
+
+Path to the repository for svnlook to use.
+
+=item <B--svnlook I<path>>
+
+Location of svnlook.  This defaults to '/usr/bin/svnlook'.
+
+
+=back
+
+If none of the options are passed the program looks for the repository as the first arguement and the transaction as the second arguement.  This is how subversion will call it if it is used directly as the pre-commit hook.
+
+=cut
+
+# script.  The general idea was to keep it simple and to the point.  
+$svnlook ||= '/usr/bin/svnlook';
+$repository ||= $ARGV[0];
+$ENV{'PATH'} = "/bin:/usr/bin:/sbin:/usr/sbin";
+
+if (!defined $repository) {
+  warn "Where is the repository?\n";
+  exit 1;
+}
+
+if (defined $transaction && defined $revision) {
+  warn "Can't have both transaction and revision defined!\n";
+  exit 1;
+}
+$transaction ||= $ARGV[1] unless defined $revision;
+my $flag  = defined $transaction ? '-t' : '-r';
+my $value = defined $transaction ? $transaction : $revision;
+
+if (!defined $value) {
+  warn "Need to know what revision/transaction to check\n";
+  exit 1;
+}
+
+# this is a simple way to add a check to a particular file type.
+# just create another element in the hash with the check command you want.  
+# the $file will be replaced with the appropiate tmp file location later on
+my %TOCHECK = (
+        pp  => '/usr/bin/puppet --ignoreimport --parseonly $file',
+        erb => 'erb -x -T "-" $file | ruby -c'
+#       pl  => '/usr/bin/perl -c $file'
+);
+
+my @errors;
+my @changed = read_from_process("$svnlook changed $flag $value $repository");
+foreach my $change (@changed) {
+  chomp($change);
+  next if $change =~ m/^D /;
+  $change =~ s/^(?:A |U |UU| U|_U)\s+(.*)/$1/;
+  syntax_check($change);
+}
+
+if (@errors) {
+  warn "\n####\n#### Syntax check failed:\n####\n";
+  foreach my $error (@errors) {
+    warn "#### $error\n";
+  }
+  warn "####\n";
+  exit 1;
+}
+
+sub syntax_check {
+  my $file = shift;
+  my ($name, $path, $ext) = fileparse($file, keys %TOCHECK);
+  return unless defined $TOCHECK{$ext};
+  return if ($name eq 'site.' || $name eq 'server.') && ($ext eq 'pp');
+
+  my $command = $TOCHECK{$ext};
+  my ($tmpfh, $tmpfn) = tempfile();
+  close $tmpfh;
+  
+  system("$svnlook cat $flag $value $repository $file > $tmpfn") &&
+    croak "Problem running $svnlook cat $flag $value $repository  $file > $tmpfn\n";
+
+  $command =~ s/\$file/$tmpfn/g;
+  my ($result, @output) = safe_read_from_pipe($command);
+  unlink $tmpfn;
+
+  if ($result) {
+    # first clean the tmpfn out and relace it with the real one...
+    # this is harder than it should be :P
+#    for my $i (0..@output) {
+#      $output[$i] =~ s/$tmpfn/$file/g;
+#    }
+#    push @errors, "File $file:", @output;
+    push @errors, "File $file";
+    return undef;
+  }
+  return 1;
+}
+
+# RL: Copied from contrib/hock-scripts/svn-keyword-check.pl
+# RL: moved the _pipe sub back into "safe_read_from_pipe" as I never call that
+# RL: explictily.  Also changed the way the code handles file handles.
+#
+# Copied from contrib/hook-scripts/check-mime-type.pl, with some
+# modifications. Moved the actual pipe creation to another subroutine
+# (_pipe), so I can use _pipe in this code, and the part of the code
+# that loops over the output of svnlook cat.
+sub safe_read_from_pipe {
+    unless (@_) {
+        croak "$0: safe_read_from_pipe passed no arguments.\n";
+    }
+    my @output;
+    my $SAFE_READ;
+    my $pid = open $SAFE_READ, '-|';
+    unless (defined $pid) {
+        die "$0: cannot fork: $!\n";
+    }
+    unless ($pid) {
+        open(STDERR, ">&STDOUT") or die "$0: cannot dup STDOUT: $!\n";
+        exec(@_) or die "$0: cannot exec `@_': $!\n";
+    }
+    while (<$SAFE_READ>) {
+        chomp;
+        push(@output, $_);
+    }
+    close($SAFE_READ);
+
+    my $result = $?;
+    my $exit   = $result >> 8;
+    my $signal = $result & 127;
+    my $cd     = $result & 128 ? "with core dump" : "";
+    if ($signal or $cd) {
+        warn "$0: pipe from `@_' failed $cd: exit=$exit signal=$signal\n";
+    }
+    return ($result, @output);
+}
+
+# Copied from contrib/hook-scripts/check-mime-type.pl
+sub read_from_process {
+    unless (@_) {
+        croak "$0: read_from_process passed no arguments.\n";
+    }
+    my ($status, @output) = &safe_read_from_pipe(@_);
+    if ($status) {
+        if (@output) {
+            die "$0: `@_' failed with this output:\n", join("\n", @output), "\n";
+        } else {
+            die "$0: `@_' failed with no output.\n";
+        }
+    } else {
+        return @output;
+    }
+}
+
+
+sub help {
+        print "type 'perldoc $0'\n";
+        exit;
+}

@@ -1,0 +1,12 @@
+#!/usr/bin/perl 
+# This file is being maintained by Puppet.
+# DO NOT EDIT
+
+#
+# Require the client to support the mergeinfo capability
+# Taken from http://svn.collab.net/repos/svn/trunk/contrib/hook-scripts/require-mergeinfo.pl
+# 
+#exit 0 if grep { $_ eq 'mergeinfo' } split ':', $ARGV[2];
+#print STDERR "Your client is too old to commit to this repository.\n";
+#print STDERR "A version 1.5 or later client is required.\n";
+#exit 1;
