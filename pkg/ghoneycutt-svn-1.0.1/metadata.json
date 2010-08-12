@@ -1,0 +1,36 @@
+{
+  "checksums": {
+    "spec/spec_helper.rb": "ca19ec4f451ebc7fdb035b52eae6e909",
+    "manifests/server.pp": "a63f688663c372551449dab243bd9407",
+    "CHANGELOG": "077cade892e30a16ee1c30c8a4e09b9d",
+    "LICENSE": "0d84dc08c20b999b693d2eda98b8c20b",
+    "files/puppet/hooks/post-commit": "673b82cdb6ab3c66022b1fef290cdf10",
+    "README": "7b630e867115a481e2f53860f6976562",
+    "files/puppet/hooks/pre-commit": "5a32d2d3d700c721b0d889f88c8bbd34",
+    "manifests/repo.pp": "8af6cfdab29d9a857f06bfb1016ea6ad",
+    "files/puppet/hooks/start-commit": "d40b3c1e537bbe6c71b81c30ce2a2dac",
+    "tests/init.pp": "a30a26361a40c42711ece20c8571d1c4",
+    "spec/spec.opts": "a600ded995d948e393fbe2320ba8e51c",
+    "metadata.json": "d34d0b70aba36510fbc2df4e667479ef",
+    "files/svnmailer.conf": "36a2d5acb451f334f7b5735fedc059bf",
+    "files/dns/hooks/post-commit": "519ed50c46326b53a072e7081325a97d",
+    "files/apache_dav.conf": "3ba2e001df161aae77b7af2d6e38f563",
+    "Modulefile": "43453ee3acd8f89747904163dba1b9f1",
+    "manifests/init.pp": "95492514b5c186dfa9463da99ac7d955"
+  },
+  "version": "1.0.1",
+  "dependencies": [
+    {
+      "version_requirement": ">= 1.0.0",
+      "name": "ghoneycutt/apache"
+    },
+    {
+      "version_requirement": ">= 1.0.0",
+      "name": "ghoneycutt/generic"
+    }
+  ],
+  "name": "ghoneycutt-svn",
+  "types": [
+
+  ]
+}
