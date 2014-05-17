@@ -87,6 +87,9 @@ class svn {
                 command => $svn_command_switch,
                 require => [File["$workingdir"],Exec["update"]],
                 before  => Exec["revert"];
+            "clean":
+                command => "svn status --no-ignore $workingdir | grep ^? | cut -c 8- | xargs -I '{}' rm -rfv '{}' || exit 1",
+                before  => Exec["update"];
             "update":
                 require => File["$workingdir"],
                 command =>  "svn update --non-interactive $workingdir";
